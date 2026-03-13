@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Player Index</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; padding: 20px; }
+    h2 { margin-bottom: 10px; }
+    #searchBox {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 15px;
+    }
+    .item {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .item:hover {
+      background: #f7f7f7;
+    }
+    .idTag {
+      font-weight: bold;
+      color: #1133bb;
+      margin-right: 8px;
+    }
+    .sub {
+      color: #555;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Search Players</h2>
+<input id="searchBox" type="text" placeholder="Search by ID, site, building, ZIP, address, etc..." />
+
+<div id="list">Loading...</div>
+<div id="diag" style="margin-top:15px; color:#777; font-size:0.85rem;"></div>
+
+<script>
+// Fetch & parse CSV --------------------------------------------------
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = "";
+  let q = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+
+    if (q) {
+      if (c === '"' && n === '"') { cell += '"'; i++; }
+      else if (c === '"') q = false;
+      else cell += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ""; }
+      else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell=""; }
+      else if (c !== '\r') cell += c;
+    }
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+// Load file
+fetch("players_clean.csv?v=" + Date.now())
+  .then(r => r.text())
+  .then(txt => buildList(parseCSV(txt)))
+  .catch(e => {
+     document.getElementById("list").innerHTML = "Error loading CSV.";
+     document.getElementById("diag").innerHTML = e.message;
+  });
+
+
+// Build searchable list ----------------------------------------------
+
+function buildList(rows) {
+  if (!rows.length) {
+    document.getElementById("list").innerHTML = "CSV Empty.";
+    return;
+  }
+
+  const head = rows[0].map(h => h.replace(/\uFEFF/g, "").trim());
+  const idxID = head.indexOf("ID");
+  const idxCountry = head.indexOf("Country");
+  const idxSite = head.indexOf("Site");
+  const idxAddress = head.indexOf("Address");
+  const idxZIP = head.indexOf("ZIP");
+
+  const container = document.getElementById("list");
+  container.innerHTML = "";
+
+  // Build entries
+  const entries = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const id = (r[idxID] || "").trim();
+    if (!id) continue;
+
+    const country = r[idxCountry] || "";
+    const site    = r[idxSite] || "";
+    const addr    = r[idxAddress] || "";
+    const zip     = r[idxZIP] || "";
+
+    const text = `${id} ${country} ${site} ${addr} ${zip}`.toLowerCase();
+
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = 
+      `<span class='idTag'>${id}</span>
+       <span class='sub'>${country} • ${site} • ${addr} (${zip})</span>`;
+
+    div.onclick = () => {
+      window.location.href = "player.html?id=" + id;
+    };
+
+    entries.push({ div, text });
+    container.appendChild(div);
+  }
+
+  // Search filter
+  document.getElementById("searchBox").oninput = function() {
+    const s = this.value.toLowerCase();
+    entries.forEach(e => {
+      e.div.style.display = e.text.includes(s) ? "" : "none";
+    });
+  };
+}
+</script>
+
+</body>
+</html>
+``
