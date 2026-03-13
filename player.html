@@ -4,61 +4,69 @@
   <title>Player Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body{font-family:Arial;padding:20px;}
-    .card{border:1px solid #ccc;padding:15px;border-radius:8px;}
-    .label{font-weight:bold;}
+    body{font-family:Arial,Helvetica,sans-serif;padding:20px;line-height:1.45}
+    .card{border:1px solid #ccc;padding:15px;border-radius:8px;margin-top:10px}
+    .label{font-weight:bold}
+    .diag{color:#555;margin-top:12px;font-size:0.92rem}
+    .bad{color:#b00020}
+    .ok{color:#0a6}
   </style>
 </head>
 <body>
 
 <h2>Player Information</h2>
 <div id="out">Loading...</div>
+<div id="diag" class="diag"></div>
 
 <script>
-  // Get id from query string, e.g. ?id=123
+  // Read id (e.g., ?id=123)
   const idParam = new URLSearchParams(window.location.search).get('id');
 
-  // If no id at all, show a simple instruction and stop
+  // Simple writer helpers
+  const out = (html) => document.getElementById('out').innerHTML = html;
+  const diag = (html) => document.getElementById('diag').innerHTML = html;
+
   if (!idParam) {
-    document.getElementById('out').innerHTML = "No ID provided in the URL. Try ?id=1";
+    out("No ID provided in the URL. Try <code>?id=1</code>");
   } else {
-    fetch('players_clean.csv')
-      .then(r => r.text())
+    // Cache-buster ensures phones don’t use an old CSV from cache/CDN
+    const url = 'players_clean.csv?v=' + Date.now();
+
+    fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
       .then(t => {
-        // Split into lines (handle \r\n or \n), drop a possible trailing empty line
+        // Split into lines (handle \r\n or \n), drop trailing empty line
         let rows = t.split(/\r?\n/);
         if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
 
-        // Split into lines (handle \r\n or \n), drop a possible trailing empty line
-        let rows = t.split(/\r?\n/);
-        if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
-
-        // Split each line into columns
+        // Split each line into columns (CSV already cleaned)
         rows = rows.map(r => r.split(','));
 
-        // Headers (strip BOM if present on first cell)
-        let head = rows[0].map(h => h.replace(/\uFEFF/g, ''));
-        let idx  = head.indexOf("ID");
+        // Headers (strip BOM/whitespace)
+        let head = rows[0].map(h => h.replace(/\uFEFF/g, '').trim());
+
+        // Diagnostics to see what the page sees (shown below the card)
+        diag(
+          `<div class="ok">Loaded CSV rows: ${rows.length}</div>` +
+          `<div>First header cell: <code>${head[0]}</code></div>` +
+          `<div>Looking for ID: <code>${idParam}</code></div>`
+        );
+
+        // Find “ID” column index
+        const idx = head.indexOf('ID');
         if (idx === -1) {
-          document.getElementById('out').innerHTML = "CSV header missing ID column.";
+          out('<span class="bad">CSV header missing ID column.</span>');
           return;
         }
 
-        // Render a simple key/value card
-        let html = "<div class='card'>";
-        head.forEach((h, i) => {
-          html += `<p><span class='label'>${h}:</span> ${rec[i] ?? ""}</p>`;
-        });
-        html += "</div>";
+        // Find matching record (row index > 0 to skip header)
+        const rec = rows.find((r,i) => i > 0 && (r[idx] || '').trim() === String(idParam).trim());
 
-        document.getElementById('out').innerHTML = html;
-      })
-      .catch(err => {
-        document.getElementById('out').innerHTML = "Error loading CSV.";
-        console.error(err);
-      });
-  }
-</script>
+        if (!rec) {
+          out(`No data for ID <code>${idParam}</code>.`);
+          return;
+        }
 
-</body>
-</html>
