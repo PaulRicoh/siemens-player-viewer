@@ -15,8 +15,9 @@ body{font-family:Arial;padding:20px;}
 <div id='out'>Loading...</div>
 <script>
 const p=new URLSearchParams(window.location.search).get('id');
-fetch('players.csv').then(r=>r.text()).then(t=>{
- let rows=t.split(/?
+fetch('players_clean.csv').then(r=>r.text()).then(t=>{
+ let rows=t.split(/
+?
 /).map(r=>r.split(','));
  let head=rows[0];
  let idx=head.indexOf('ID');
