@@ -3,6 +3,7 @@
 <head>
   <title>Player Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
     body{font-family:Arial,Helvetica,sans-serif;padding:20px;line-height:1.45}
     .card{border:1px solid #ccc;padding:15px;border-radius:8px;margin-top:10px}
@@ -10,6 +11,7 @@
     .diag{color:#555;margin-top:12px;font-size:0.92rem}
     .bad{color:#b00020}
     .ok{color:#0a6}
+    code{background:#f6f8fa;padding:2px 4px;border-radius:4px}
   </style>
 </head>
 <body>
@@ -17,64 +19,134 @@
 <h2>Player Information</h2>
 <div id="out">Loading...</div>
 <div id="diag" class="diag"></div>
-  <script>
 
-window.onerror = function(msg, url, line, col, err) {
-  document.getElementById('out').innerHTML = 
-    "<b style='color:#b00020;'>JavaScript error:</b><br>" + msg +
-    "<br><br><b>Line:</b> " + line +
-    "<br><b>URL:</b> " + url;
-};
+<script>
+  /* -------- 1) Show any JS error right on the page -------- */
+  window.onerror = function (msg, url, line, col, err) {
+    document.getElementById('out').innerHTML =
+      "<b class='bad'>JavaScript error:</b><br>" + msg +
+      "<br><br><b>Line:</b> " + line +
+      "<br><b>URL:</b> " + url;
+  };
 
-// the rest of the viewer script below…
-  // Read id (e.g., ?id=123)
+  /* -------- 2) Helpers -------- */
   const idParam = new URLSearchParams(window.location.search).get('id');
-
-  // Simple writer helpers
-  const out = (html) => document.getElementById('out').innerHTML = html;
+  const out  = (html) => document.getElementById('out').innerHTML  = html;
   const diag = (html) => document.getElementById('diag').innerHTML = html;
 
+  /* A small CSV parser that supports quoted fields, commas in quotes, and CRLF.
+     - Returns an array of rows, where each row is an array of cells.
+     - Handles escaped quotes inside quotes (""). */
+  function parseCSV(text) {
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i+1];
+
+      if (inQuotes) {
+        if (ch === '"' && next === '"') {         // Escaped quote ""
+          cell += '"';
+          i++;                                    // Skip the next quote
+        } else if (ch === '"') {                  // Closing quote
+          inQuotes = false;
+        } else {
+          cell += ch;                             // Regular char inside quotes
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;                        // Opening quote
+        } else if (ch === ',') {
+          row.push(cell);
+          cell = '';
+        } else if (ch === '\n') {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = '';
+        } else if (ch === '\r') {
+          // Ignore bare \r (CR); CRLF will be handled when \n arrives
+        } else {
+          cell += ch;
+        }
+      }
+    }
+    // Push final cell/row if any
+    if (cell.length > 0 || inQuotes || row.length > 0) {
+      row.push(cell);
+      rows.push(row);
+    }
+    // Drop a trailing empty row if present
+    if (rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0].trim() === '') {
+      rows.pop();
+    }
+    return rows;
+  }
+
+  /* -------- 3) Main flow -------- */
   if (!idParam) {
     out("No ID provided in the URL. Try <code>?id=1</code>");
   } else {
-    // Cache-buster ensures phones don’t use an old CSV from cache/CDN
-    const url = 'players_clean.csv?v=' + Date.now();
+    // Force fresh CSV on phones/CDN
+    const csvUrl = 'players_clean.csv?v=' + Date.now();
 
-    fetch(url)
+    fetch(csvUrl)
       .then(r => {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
       })
-      .then(t => {
-        // Split into lines (handle \r\n or \n), drop trailing empty line
-        let rows = t.split(/\r?\n/);
-        if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
-
-        // Split each line into columns (CSV already cleaned)
-        rows = rows.map(r => r.split(','));
-
-        // Headers (strip BOM/whitespace)
-        let head = rows[0].map(h => h.replace(/\uFEFF/g, '').trim());
-
-        // Diagnostics to see what the page sees (shown below the card)
-        diag(
-          `<div class="ok">Loaded CSV rows: ${rows.length}</div>` +
-          `<div>First header cell: <code>${head[0]}</code></div>` +
-          `<div>Looking for ID: <code>${idParam}</code></div>`
-        );
-
-        // Find “ID” column index
-        const idx = head.indexOf('ID');
-        if (idx === -1) {
-          out('<span class="bad">CSV header missing ID column.</span>');
+      .then(txt => {
+        const rows = parseCSV(txt);
+        if (!rows.length) {
+          out("<span class='bad'>CSV appears empty.</span>");
           return;
         }
 
-        // Find matching record (row index > 0 to skip header)
-        const rec = rows.find((r,i) => i > 0 && (r[idx] || '').trim() === String(idParam).trim());
+        // Headers: strip BOM and trim each header
+        let head = rows[0].map(h => h.replace(/\uFEFF/g, '').trim());
+
+        // Diagnostics so we can see what the page sees
+        diag(
+          `<div class="ok">Loaded CSV rows: ${rows.length}</div>` +
+          `<div>First header cell: <code>${head[0] ?? ''}</code></div>` +
+          `<div>Looking for ID: <code>${idParam}</code></div>`
+        );
+
+        // Find ID column
+        const idx = head.indexOf('ID');
+        if (idx === -1) {
+          out("<span class='bad'>CSV header missing ID column.</span>");
+          return;
+        }
+
+        // Find matching record (skip header row)
+        const rec = rows.find((r, i) =>
+          i > 0 && ((r[idx] ?? '').trim() === String(idParam).trim())
+        );
 
         if (!rec) {
           out(`No data for ID <code>${idParam}</code>.`);
           return;
         }
 
+        // Render card
+        let html = '<div class="card">';
+        head.forEach((h, i) => {
+          html += `<p><span class="label">${h}:</span> ${rec[i] ?? ''}</p>`;
+        });
+        html += '</div>';
+        out(html);
+      })
+      .catch(err => {
+        out('<span class="bad">Error loading CSV.</span>');
+        diag(`<div class="bad">Fetch/parse error: ${err.message}</div>`);
+        console.error(err);
+      });
+  }
+</script>
+
+</body>
+</html>
