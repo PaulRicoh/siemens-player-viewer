@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -10,24 +9,40 @@ body{font-family:Arial;padding:20px;}
 .label{font-weight:bold;}
 </style>
 </head>
+
 <body>
 <h2>Player Information</h2>
 <div id='out'>Loading...</div>
+
 <script>
-const p=new URLSearchParams(window.location.search).get('id');
-fetch('players_clean.csv').then(r=>r.text()).then(t=>{
- let rows=t.split(/
-?
-/).map(r=>r.split(','));
- let head=rows[0];
- let idx=head.indexOf('ID');
- let rec=rows.find(r=>r[idx]===p);
- if(!rec){document.getElementById('out').innerHTML='No data';return;}
- let html='<div class="card">';
- head.forEach((h,i)=>{html+=`<p><span class='label'>${h}:</span> ${rec[i]}</p>`});
- html+='</div>';
- document.getElementById('out').innerHTML=html;
+const p = new URLSearchParams(window.location.search).get('id');
+
+fetch('players_clean.csv')
+  .then(r => r.text())
+  .then(t => {
+
+    // Split text into rows, split each row into columns
+    let rows = t.split(/\r?\n/).map(r => r.split(","));
+
+    let head = rows[0];                 // Header row
+    let idx = head.indexOf("ID");       // Column index of ID
+    let rec = rows.find(r => r[idx] === p);  // Matching row
+
+    if (!rec) {
+        document.getElementById('out').innerHTML = "No data";
+        return;
+    }
+
+    // Build HTML card
+    let html = "<div class='card'>";
+    head.forEach((h,i) => {
+        html += `<p><span class='label'>${h}:</span> ${rec[i]}</p>`;
+    });
+    html += "</div>";
+
+    document.getElementById('out').innerHTML = html;
 });
 </script>
+
 </body>
 </html>
