@@ -1,47 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Player Viewer</title>
-<meta name='viewport' content='width=device-width, initial-scale=1'>
-<style>
-body{font-family:Arial;padding:20px;}
-.card{border:1px solid #ccc;padding:15px;border-radius:8px;}
-.label{font-weight:bold;}
-</style>
+  <title>Player Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:Arial;padding:20px;}
+    .card{border:1px solid #ccc;padding:15px;border-radius:8px;}
+    .label{font-weight:bold;}
+  </style>
 </head>
-
 <body>
+
 <h2>Player Information</h2>
-<div id='out'>Loading...</div>
+<div id="out">Loading...</div>
 
 <script>
-const p = new URLSearchParams(window.location.search).get('id');
+  // Get id from query string, e.g. ?id=123
+  const idParam = new URLSearchParams(window.location.search).get('id');
 
-fetch('players_clean.csv')
-  .then(r => r.text())
-  .then(t => {
+  // If no id at all, show a simple instruction and stop
+  if (!idParam) {
+    document.getElementById('out').innerHTML = "No ID provided in the URL. Try ?id=1";
+  } else {
+    fetch('players_clean.csv')
+      .then(r => r.text())
+      .then(t => {
+        // Split into lines (handle \r\n or \n), drop a possible trailing empty line
+        let rows = t.split(/\r?\n/);
+        if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
 
-    // Split text into rows, split each row into columns
-    let rows = t.split(/\r?\n/).map(r => r.split(","));
+        // Split each line into columns
+        rows = rows.map(r => r.split(','));
 
-    let head = rows[0];                 // Header row
-    let idx = head.indexOf("ID");       // Column index of ID
-    let rec = rows.find(r => r[idx] === p);  // Matching row
+        // Headers (strip BOM if present on first cell)
+        let head = rows[0].map(h => h.replace(/\uFEFF/g, ''));
+        let idx  = head.indexOf("ID");
+        if (idx === -1) {
+          document.getElementById('out').innerHTML = "CSV header missing ID column.";
+          return;
+        }
 
-    if (!rec) {
-        document.getElementById('out').innerHTML = "No data";
-        return;
-    }
+        // Find the matching record by exact ID match
+        const rec = rows.find((r, i) => i > 0 && r[idx] === String(idParam));
 
-    // Build HTML card
-    let html = "<div class='card'>";
-    head.forEach((h,i) => {
-        html += `<p><span class='label'>${h}:</span> ${rec[i]}</p>`;
-    });
-    html += "</div>";
+        if (!rec) {
+          document.getElementById('out').innerHTML = "No data for ID " + idParam;
+          return;
+        }
 
-    document.getElementById('out').innerHTML = html;
-});
+        // Render a simple key/value card
+        let html = "<div class='card'>";
+        head.forEach((h, i) => {
+          html += `<p><span class='label'>${h}:</span> ${rec[i] ?? ""}</p>`;
+        });
+        html += "</div>";
+
+        document.getElementById('out').innerHTML = html;
+      })
+      .catch(err => {
+        document.getElementById('out').innerHTML = "Error loading CSV.";
+        console.error(err);
+      });
+  }
 </script>
 
 </body>
