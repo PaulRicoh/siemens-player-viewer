@@ -29,6 +29,10 @@
         let rows = t.split(/\r?\n/);
         if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
 
+        // Split into lines (handle \r\n or \n), drop a possible trailing empty line
+        let rows = t.split(/\r?\n/);
+        if (rows.length && rows[rows.length - 1].trim() === '') rows.pop();
+
         // Split each line into columns
         rows = rows.map(r => r.split(','));
 
@@ -37,14 +41,6 @@
         let idx  = head.indexOf("ID");
         if (idx === -1) {
           document.getElementById('out').innerHTML = "CSV header missing ID column.";
-          return;
-        }
-
-        // Find the matching record by exact ID match
-        const rec = rows.find((r, i) => i > 0 && r[idx] === String(idParam));
-
-        if (!rec) {
-          document.getElementById('out').innerHTML = "No data for ID " + idParam;
           return;
         }
 
